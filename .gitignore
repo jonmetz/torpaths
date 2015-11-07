@@ -1,0 +1,5 @@
+*~
+\#*\#
+*.pyc
+ghostdriver.log
+__pycache__
