@@ -2,110 +2,106 @@
 The only real way to use this module is by using browser.visit
 (on an instance of the Browser class. This method finds the paths
 traversed when a browser visits a webpage.
-Note that the mitmdump proxy with the proxy.py (included in this package)
-extension must be running for this to work.
 
 """
+
+import itertools
 import sys
+import time
+import urlparse
 
 from multiprocessing.pool import ThreadPool
 
-import redis
-
-from selenium import webdriver
+import envoy
 
 from trace_asn_paths import AsnTracer
 from trace_dns import DNSTracer
 from common import is_addr_private
 
+
 class Browser(object):
     """
-    Controls the browser (PhantomJS) using selenium. Visits sites with it,
-    coordinates recording of network traffic with the proxy, reads the results
-    of the recording from redis, and does traces on the results.
+    Controls the browser (PhantomJS). Visits sites with it, records hosts
+    that were contacted during the page load and does traceroutes to these
+    hosts and the dns servers used to locate them.
 
     """
 
-    PROXY_INPUT_QUEUE = 'proxy_queue'
+    def __init__(self, thread_count=8):
 
-    def __init__(self, proxy_url='localhost:8000', thread_count=4,
-                 window_sz=(1366, 728),
-                 ghostdriver_log_location='/tmp/ghostdriver.log'):
-
-        """
-        The default arguments should work for 99% of cases.
-        """
-
-        service_args = [
-            '--proxy=' + proxy_url,
-            '--ignore-ssl-errors=true'
-        ]
-        self.driver = webdriver.PhantomJS(
-            service_log_path=ghostdriver_log_location,
-            service_args=service_args
-        )
-        self.driver.set_window_size(*window_sz)
-
-        self.redis_conn = redis.Redis()
         self.dns_tracer = DNSTracer()
         self.pool = ThreadPool(thread_count)
         self.asn_tracer = AsnTracer()
 
+
+    def _hosts_from_page(self, page_url):
+        """
+        Uses PhantomJS to visit a returns a list of hosts that are connected to,
+        to fetch resources when loading the page.
+
+        """
+
+        browser_proc = envoy.run("phantomjs browser.js " + page_url, timeout=30)
+        urls = [url.strip('"') for url in browser_proc.std_out.split('\n') if url != '' ]
+        netlocs = [urlparse.urlparse(url).netloc for url in urls]
+        contacted_hosts = set(netloc if ':' not in netloc else netloc.split(':')[0] for netloc in netlocs)
+        return contacted_hosts
+
+    def visit_multiple(self, page_urls):
+        """
+        The plural version of visit.
+
+        """
+        # TODO: parallelize?
+        return map(self.visit, page_urls)
+
+
     def visit(self, page_url):
         """
         Visits a webpage and determines the paths that are traversed when visiting it.
+
+        """
+        resource_hosts = self._hosts_from_page(page_url)
+
+        # This stores the results we care about
+        print page_url
+        page_result = {
+            'page': page_url,
+            'resource_hosts': map(self._trace, list(resource_hosts))
+        }
+        return PageResult(page_result)
+
+    def _trace(self, host):
+        """
+        Traces the Asns to a host and to the nameservers used to find the host.
+        Returns the nameservers queried, and the Asns traversed to each host.
+
         """
 
-        # Remove leftovers from previous visit
-        self.redis_conn.delete(self.PROXY_INPUT_QUEUE)
-        self.redis_conn.delete(page_url)
-        # make sure the proxy knows what page the requests come from
-        self.redis_conn.lpush(self.PROXY_INPUT_QUEUE, page_url)
-        self.driver.get(page_url)
-        # when this point is reached, we have fetched most resources on the page
-        contacted_hosts = set( # remove the many duplicates
-            self.redis_conn.lrange(page_url, 0, -1) # get all the hosts
-        )
-        self.redis_conn.delete(page_url)
-        assert contacted_hosts, "No hosts contacted, is mitmdump (proxy.py) running?"
 
-        def host_to_path_dict(host):
+        def asn_tracer_dns_helper(contacted_host):
             """
-            Helper function used by the thread pool
+            For use on DNS servers.
 
             """
 
             return {
-                'host': host,
-                'traversed_asns': self.asn_tracer.trace(host),
+                'host': contacted_host,
+                'traversed_asns': self.asn_tracer.trace(contacted_host)
             }
 
-        # This stores the results we care about
-        page_traversed_asns = {
-            'page': page_url,
-            'hosts': self.pool.map(host_to_path_dict, contacted_hosts)
+        dirty_queried_dns_servers = self.dns_tracer.trace(host)
+        queried_dns_servers = [dns_server for dns_server in
+                               dirty_queried_dns_servers if dns_server and
+                               not is_addr_private(dns_server)]
+        return {
+            'host': host,
+            'traversed_asns': self.asn_tracer.trace(host),
+            'queried_dns_servers': self.pool.map(
+                asn_tracer_dns_helper,
+                queried_dns_servers
+            )
         }
-        # add traces of DNS servers that were contacted during this visit
-        #self.get_dns_servers_paths(page_traversed_asns)
-        self.driver.close()
-        return PageResult(page_traversed_asns)
-
-    def get_dns_servers_paths(self, page_results):
-        """
-        Finds the paths traversed to any DNS server that was contacted in order
-        to fetch resources needed to load a page.
-
-        """
-        for host_dict in page_results['hosts']:
-            queried_dns_servers = self.dns_tracer.trace(host_dict['host'])
-            traversed_to_dns_servers = []
-            for dns_server in queried_dns_servers:
-                if not is_addr_private(dns_server):
-                    traversed_to_dns_servers.extend(
-                        self.asn_tracer.trace(dns_server)
-                    )
-            host_dict['traversed_asns'] += traversed_to_dns_servers
-
 
 class PageResult(object):
     """
@@ -115,22 +111,24 @@ class PageResult(object):
     """
 
     def __init__(self, result):
-        self.result = result
+        self._result = result
 
     def __unicode__(self):
-        return str(self.result)
+        return unicode(self._result)
 
     def __str__(self):
-        return str(self.result)
+        return str(self._result)
 
     def __repr__(self):
-        return str(self.summarize())
+        return str(self.summary)
 
     def get_resource_hosts(self):
         """
         returns the hosts that were contacted directly to fetch resources.
 
         """
+        for host_dict in hosts:
+            return host_dict['host']
 
     def get_dns_servers(self):
         """
@@ -152,14 +150,15 @@ class PageResult(object):
 
         """
 
-    def summarize(self):
+    @property
+    def summary(self):
         """
         Provides a summary of the result as a (page, asns_traversed) tuple.
 
         """
-        page_url = self.result['page']
+        page_url = self._result['page']
         asns = set()
-        for contacted_host in self.result['hosts']:
+        for contacted_host in self._result['hosts']:
             for asn in contacted_host['traversed_asns']:
                 asn_str = asn['asn']
                 if asn_str:
