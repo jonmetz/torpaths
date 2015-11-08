@@ -90,8 +90,11 @@ class AsnTracer(object):
             assert len(answers) == 1
             results = re.findall(cls.ASN_MAPPING_REGEX, answers[0].to_text())
             # if there's more than one reuslt they better be the same
-            assert len(set(results)) == 1, results
-            asn = results[0]
+            if len(set(results)) != 1:
+                asn = '/'.join(list(set(results)))
+            else:
+                asn = results[0]
+
             # we don't lookup the whois info if the asn mapping was successful
             asns.append({'host': host, 'asn': asn, 'whois': None})
 
