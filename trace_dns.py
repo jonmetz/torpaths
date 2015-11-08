@@ -7,6 +7,8 @@ import re
 
 import envoy
 
+from common import is_addr_private
+
 
 class DNSTracer(object):
     """
@@ -24,4 +26,5 @@ class DNSTracer(object):
         # TODO: use scapy for this instead of dig and envoy
         proc = envoy.run('dig +trace '+ domain_name)
         assert proc.status_code == 0
-        return self.REGEX.findall(proc.std_out)
+        results = self.REGEX.findall(proc.std_out)
+        return [result for result in results if not is_addr_private(result)]
