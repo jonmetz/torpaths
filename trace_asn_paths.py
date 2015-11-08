@@ -11,6 +11,8 @@ import urllib2
 
 import dns.resolver
 from scapy.all import traceroute as scapy_traceroute
+from scapy.all import conf as scapy_conf
+scapy_conf.verb = 0  # shutup scapy
 
 from common import is_addr_private
 

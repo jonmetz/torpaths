@@ -4,6 +4,8 @@ The only real way to use this module is by using browser.visit
 traversed when a browser visits a webpage.
 
 """
+import logging
+logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 
 import itertools
 import sys
@@ -251,6 +253,7 @@ class PageResult(object):
 
         """
         asns = self.get_asns()
+        asns.sorted()
 
         return [self.raw_result['page'], asns]
 
