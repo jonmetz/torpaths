@@ -111,24 +111,26 @@ class PageResult(object):
     """
 
     def __init__(self, result):
-        self._result = result
+        self.raw_result = result
 
     def __unicode__(self):
-        return unicode(self._result)
+        return unicode(self.raw_result)
 
     def __str__(self):
-        return str(self._result)
+        return str(self.raw_result)
 
     def __repr__(self):
         return str(self.summary)
+
 
     def get_resource_hosts(self):
         """
         returns the hosts that were contacted directly to fetch resources.
 
         """
-        for host_dict in hosts:
-            return host_dict['host']
+        hosts = self.raw_result['resource_hosts']
+        return [host_dict for host_dict in hosts]
+
 
     def get_dns_servers(self):
         """
@@ -136,12 +138,39 @@ class PageResult(object):
         that were queried in order to connect to the resources_hosts
 
         """
+        hosts = self.raw_result['resource_hosts']
+        dns_servers = []
+        for host in hosts:
+            dns_servers.extend(host['queried_dns_servers'])
+        return dns_servers
+
+    def _get_hosts(self, l):
+        return list(set(x['host'] for x in l))
+
+    def get_resource_host_hostnames(self):
+        """
+        Get the hostnames of the servers this page needed to load resources from.
+
+        """
+        return self._get_hosts(self.get_resource_hosts())
+
+    def get_dns_server_hostnames(self):
+        """
+        Get the hostnames of the dns servers that were queried to get
+        everything needed by this page
+
+        """
+
+        return self._get_hosts(self.get_dns_servers())
 
     def get_resource_hosts_asns(self):
         """
         returns the list of asns traversed to reach the resource_hosts
 
         """
+        resource_hosts = self.get_resource_hosts()
+        return list(set(itertools.chain(*[self.summarize_resource_host(host)
+                                          for host in resource_hosts])))
 
     def get_dns_servers_asns(self):
         """
@@ -149,6 +178,71 @@ class PageResult(object):
         traversed to reach the result of get_dns_servers
 
         """
+        servers = self.get_dns_servers()
+        return list(set(itertools.chain(*[self.summarize_dns_server(server)
+                                          for server in servers])))
+
+    def summarize_asn(self, asn_result):
+        """
+        Returns an asn dict's AS number or the orgRef of the host from its whois
+        info, if we couldn't figure out the AS.
+
+        """
+
+        if asn_result['asn']:
+            return asn_result['asn']
+        else:
+            whois = asn_result['whois']
+            return whois['org_handle'] if whois['org_handle'] else None
+
+    def summarize_dns_server(self, dns_server):
+        return list(
+            set(
+                self.summarize_asn(asn) for asn in dns_server['traversed_asns']
+            )
+        )
+
+
+    def summarize_resource_host(self, r_server):
+        summarized_asns = [
+            self.summarize_asn(asn) for asn in r_server['traversed_asns']
+        ]
+
+        summarized_dns_servers = list(itertools.chain(
+            *[self.summarize_dns_server(dns_server) for dns_server in
+              r_server['queried_dns_servers']]
+        ))
+
+        return summarized_dns_servers + summarized_asns
+
+    def get_asns(self):
+        """
+        Show all asns traversed to view a page, including ones that we've
+        used the host's whois data because we couldn't find its AS.
+
+        """
+
+        asns = [self.summarize_resource_host(host) for host in
+                self.raw_result['resource_hosts']]
+        return list(set(itertools.chain(*asns)))
+
+    def get_real_asns(self):
+        """
+        Only show ASNs that are real, not ones that are orgRefs from
+        whois data.
+
+        """
+
+        return list(set(self.get_asns()) - set(self.get_pseudo_asns()))
+
+    def get_pseudo_asns(self):
+        """
+        Get asns which we had to use whois data for instead.
+
+        """
+
+        asns = self.get_asns()
+        return [asn for asn in asns if asn.isalpha()]
 
     @property
     def summary(self):
@@ -156,26 +250,17 @@ class PageResult(object):
         Provides a summary of the result as a (page, asns_traversed) tuple.
 
         """
-        page_url = self._result['page']
-        asns = set()
-        for contacted_host in self._result['hosts']:
-            for asn in contacted_host['traversed_asns']:
-                asn_str = asn['asn']
-                if asn_str:
-                    asns.add(asn_str)
-                else:  # asn was None: was unable to find asn from IP
-                    org_handle = asn['whois']['org_handle']
-                    if org_handle:
-                        asns.add(org_handle)
-                    else:  # couldn't find an org_handle from IP's whois data
-                        asns.add(asn['addr'])
-        return page_url, asns
+        asns = self.get_asns()
+
+        return [self.raw_result['page'], asns]
 
 def main():
     assert len(sys.argv) > 1
     urls = sys.argv[1:]
     browser = Browser()
-    return [browser.visit(url) for url in urls]
+    result = browser.visit_multiple(urls)
+    print(result)
+    return result
 
 
 if __name__ == '__main__':
