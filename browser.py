@@ -6,11 +6,9 @@ traversed when a browser visits a webpage.
 """
 import os
 import httplib
-import multiprocessing
-import threading
+import multiprocessing as mp
 
 from time import sleep
-from multiprocessing.pool import ThreadPool
 
 from pyvirtualdisplay import Display
 from selenium import webdriver
@@ -21,8 +19,6 @@ from selenium.common import exceptions as selenium_exception
 from proxy import run
 from common import get_db
 
-db = get_db()
-queues = []
 
 class Browser(object):
     """
@@ -35,19 +31,12 @@ class Browser(object):
     SLEEP_MAX = 60
 
     def __init__(self, proxy_url='127.0.0.1:8000', q=None):
-
         self.proxy_url = proxy_url
-        # self.display = Display(visible=0, size=(800, 600))
-        # self.display.start()
+        self.display = Display(visible=0, size=(800, 600))
+        self.display.start()
         _, port = proxy_url.split(':')
         port = int(port)
-        self.proxy_queue = multiprocessing.Queue()
-        print str(id(self.proxy_queue)), 'making proxy', self.proxy_queue.empty()
-        if self.proxy_queue in queues:
-            import ipdb; ipdb.set_trace()
-        queues.append(self.proxy_queue)
-        self._proxy_proc, q = run(q=self.proxy_queue, port=port)
-        assert q is self.proxy_queue
+        self._proxy_proc, self.proxy_queue = run(port=port)
 
         self.FF_PROFILE_PREFERENCES = {
             'browser.cache.disk.capacity': 0,
@@ -98,8 +87,8 @@ class Browser(object):
             import ipdb; ipdb.set_trace()
         return list(contacted_hosts)
 
-    def _wait_for_requests(self, sleep_period=2, at_least=7):
-        print 'wait'
+    def _wait_for_requests(self, sleep_period=2, at_least=3):
+
         contacted_hosts = set()
         sleep(at_least)
         should_sleep = True
@@ -123,7 +112,6 @@ class Browser(object):
         Visits a webpage and determines the paths that are traversed when visiting it.
 
         """
-        # sleep(20)
 
         proxy = Proxy({
             'proxyType': ProxyType.MANUAL,
@@ -143,6 +131,7 @@ class Browser(object):
             self.driver.quit()
         except httplib.BadStatusLine:
             print 'bad status line'
+            return
 
         data = {
             'url': page_url,
@@ -152,55 +141,58 @@ class Browser(object):
         return hosts
 
 
-
 class MultiVisitor(object):
     PROXY_HOST = '127.0.0.1'
     port = 8000
-    port_lock = threading.Lock()
 
-    def __init__(self, num_threads=2):
+    def __init__(self, num_threads=8):
         self.num_threads = num_threads
-        self.pool = multiprocessing.Pool(num_threads)
+        self.pool = mp.Pool(num_threads)
 
     def visit_multiple(self, urls):
 
         def pick_port_num(url):
-            num = self.get_port_helper()
+            num = self.get_port()
             return num, url
 
         urls = map(pick_port_num, urls)
         self.pool.map(_visit_one, urls)
-        # for _, b in MultiVisitor._visit_one_browsers.iteritems():
-        #     b.kill_proxy()
 
     @classmethod
-    def get_port_helper(cls):
+    def get_port(cls):
         port = cls.port
         cls.port += 1
         return port
 
-    @classmethod
-    def get_port(cls):
-        cls.port_lock.acquire()
-        port = cls.get_port_helper()
-        cls.port_lock.release()
-        return port
 
-
-def _visit_one(port_url_tup):
+def _visit_one(port_url_tup, storage={}):
     port, url = port_url_tup
     proxy_url = MultiVisitor.PROXY_HOST + ':' + str(8000 + port)
-    b = Browser(proxy_url=proxy_url)
+
+    if not 'browser' in storage:
+        b = Browser(proxy_url=proxy_url)
+        storage['browser'] = b
+        assert 'db' not in storage
+        db = get_db()
+        storage['db'] = db
+    else:
+        b = storage['browser']
+        db = storage['db']
+        # empty the queue
+        while not b.proxy_queue.empty():
+            b.proxy_queue.get()
+
     try:
         hosts = b.visit(url)
+
         db.pages.insert_one({
             'url': url,
             'hosts': hosts
         })
     except selenium_exception.TimeoutException:
         print 'TimeoutException on {0}'.format(url)
+        return
     except selenium_exception.WebDriverException:
         print 'webdriver exception on {0}'.format(url)
-    b.kill_proxy()
-
+        return
     return hosts
