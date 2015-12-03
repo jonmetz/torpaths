@@ -102,7 +102,7 @@ class AsnTracer(object):
 
         return asns
 
-    def trace(self, host, use_cache=True, dont_cache=False):
+    def trace(self, host, use_cache=False, dont_cache=True):
         """
         This is the main interface of AsnTracer class to the outside world.
         Given a host it performs a traceroute to the host and then looksup the
