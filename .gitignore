@@ -6,3 +6,4 @@ __pycache__
 *.db*
 *.csv*
 *.json*
+guard_traces
