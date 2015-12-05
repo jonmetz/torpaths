@@ -5,3 +5,4 @@ ghostdriver.log
 __pycache__
 *.db*
 *.csv*
+*.json*
