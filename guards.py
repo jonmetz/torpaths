@@ -4,8 +4,9 @@ from onionoo import Onionoo
 import trace_asn_paths
 from common import get_db
 
-db = get_db()
+db = get_db().guard_traces
 asn_tracer = trace_asn_paths.AsnTracer()
+
 
 def is_ipv6(netloc):
     return netloc.count(':') > 1 and '[' in netloc and ']' in netloc
@@ -27,7 +28,6 @@ def clean_onionoo_data(relay):
     return cleaned
 
 def get_guard_addrs():
-
     o = Onionoo()
     relays = o.get_relays()
     relays = o.remove_nonrunning(relays)
@@ -41,11 +41,12 @@ def get_and_save_guard_traces():
     i = 0
     for addr in guard_addrs:
         if i == 10:
-            i += 1
+            break
+        i += 1
         trace = asn_tracer.trace(addr)
         guard_trace = {
-            'guard': addr,
-            'traces': trace
+            'host': addr,
+            'trace': trace
         }
         db.insert_one(guard_trace)
         guard_traces.append(guard_trace)

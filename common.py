@@ -7,10 +7,11 @@ import os
 import urllib
 import json
 
-from pymongo import MongoClient
+import pymongo
+
 from ipaddr import IPAddress
 
-MY_PUBLIC_IP = None
+DEBUG = os.getenv('TORPATHS_DEBUG', False)
 
 def is_addr_private(addr_str):
     addr = IPAddress(addr_str)
@@ -18,21 +19,40 @@ def is_addr_private(addr_str):
 
 def get_db():
     mongo_netloc = os.getenv('TORPATHS_MONGO_NETLOC', None)
+
     if mongo_netloc is None:
-        return MongoClient().torpaths
+        return pymongo.MongoClient().torpaths
     else:
         mongo_host, mongo_port_str = mongo_netloc.split(':')
         mongo_port = int(mongo_port_str)
-        return MongoClient(host=mongo_host, port=mongo_port).torpaths
+        if not DEBUG:
+            return pymongo.MongoClient(host=mongo_host, port=mongo_port).torpaths
+        else:
+            return pymongo.MongoClient(host=mongo_host, port=mongo_port).torpaths_debug
 
-def get_my_public_ip(cache=True):
-    if MY_PUBLIC_IP is None or not cache:
-        data = json.loads(urllib.open("http://wtfismyip.com/").read())
-        addr = data['YourFuckingIPAddress']
-        MY_PUBLIC_IP = str(addr)
-
-    return MY_PUBLIC_IP
+def get_my_public_ip():
+    data = json.loads(urllib.urlopen("http://wtfismyip.com/json").read())
+    addr = data['YourFuckingIPAddress']
+    my_ip = str(addr)
+    return my_ip
 
 def remove_collection(name):
     db = get_db()
     return getattr(db, name).remove()
+
+
+def copy_collection(from_coll, to_coll):
+    db = get_db()
+    from_coll = getattr(db, from_coll).find()
+    sz = 0
+    for item in from_coll:
+        try:
+            getattr(db, to_coll).insert_one(item)
+            sz += 1
+        except pymongo.errors.DuplicateKeyError:
+            print 'already copied'
+
+    return sz
+
+def get_collection(name):
+    return list(get_db()[name].find())
