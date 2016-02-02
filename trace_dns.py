@@ -5,7 +5,7 @@ Instantiate a DNSTracer object and call object.trace(domain_name) to use.
 
 import re
 
-import envoy
+import subprocess
 
 from common import is_addr_private
 
@@ -24,7 +24,9 @@ class DNSTracer(object):
         an answer
         """
         # TODO: use scapy for this instead of dig and envoy
-        proc = envoy.run('dig +trace '+ domain_name)
-        assert proc.status_code == 0
-        results = self.REGEX.findall(proc.std_out)
+        cmd = ['dig', '+trace', domain_name]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        out, err = proc.communicate()
+        assert err is None
+        results = self.REGEX.findall(out)
         return [result for result in results if not is_addr_private(result)]
