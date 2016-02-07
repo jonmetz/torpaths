@@ -45,7 +45,7 @@ def get_db(name=None):
     mongo_netloc = os.getenv('TORPATHS_MONGO_NETLOC', None)
 
     if mongo_netloc is None:
-        db = MongoClient()
+        db = MongoClient(connect=False)
     else:
         mongo_host, mongo_port_str = mongo_netloc.split(':')
         mongo_port = int(mongo_port_str)
