@@ -13,7 +13,7 @@ from trace_dns import DNSTracer
 from database import get_sites, import_sites, get_db
 from guards import get_and_save_guard_traces
 
-NUM_PAGES_DEFAULT = 100
+NUM_PAGES_DEFAULT = 300
 
 db = get_db()
 

@@ -35,11 +35,22 @@ def is_addr_public(addr_str):
     return not (addr.is_private or addr.is_loopback or addr.is_multicast or
                 addr.is_link_local)
 
+class MyPublicIPGetter(object):
+    my_ip = None
+
+    def __init__(self):
+        if not self.my_ip:
+            try:
+                data = json.loads(urllib.urlopen("http://wtfismyip.com/json").read())
+                addr = data['YourFuckingIPAddress']
+            except ValueError:
+                addr = json.loads(urllib.urlopen('http://jsonip.com/').read())['ip']
+
+                self.my_ip = str(addr)
+
 def get_my_public_ip():
-    data = json.loads(urllib.urlopen("http://wtfismyip.com/json").read())
-    addr = data['YourFuckingIPAddress']
-    my_ip = str(addr)
-    return my_ip
+    ip_getter = MyPublicIPGetter()
+    return ip_getter.my_ip
 
 def get_unique_asns(tracable):
     if tracable['host'] in HOST_BLACKLIST:
