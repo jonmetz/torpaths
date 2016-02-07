@@ -13,9 +13,11 @@ from trace_dns import DNSTracer
 from database import get_sites, import_sites, get_db
 from guards import get_and_save_guard_traces
 
+NUM_PAGES_DEFAULT = 100
+
 db = get_db()
 
-def get_and_save_page_hosts(max_pages=500):
+def get_and_save_page_hosts(max_pages=NUM_PAGES_DEFAULT):
     n_pages = 0
     while True:
         if n_pages == max_pages:
@@ -43,8 +45,10 @@ def get_and_save_page_hosts(max_pages=500):
         b.kill_proxy()
 
 
-def get_page_hosts(include_dns_servers=False):
-    pages = db.pages.find()
+def get_page_hosts(pages=None, include_dns_servers=False):
+    if pages is None:
+        pages = db.pages.find()
+
     page_hosts = set()
     for page in pages:
         for host in page['hosts']:
@@ -58,15 +62,23 @@ def get_page_hosts(include_dns_servers=False):
 
     return page_hosts
 
-def trace_dns_of_page_hosts():
+def trace_dns_of_page_hosts(page_hosts=None):
+    if page_hosts is None:
+        page_hosts = get_page_hosts()
+
     dns_tracer = DNSTracer()
     host_dns_servers = get_db().page_host_dns_servers
-    page_hosts = get_page_hosts()
+
     for host in page_hosts:
-        # Skip any host that isn't an IP
+        # Skip any host that is an IP
         try:
             IPAddress(host)
+            continue
         except ValueError:
+            pass
+
+        # Skip any hosts we have traced before
+        if list(host_dns_servers.find({'host': host})):
             continue
 
         host_dns_trace = {
@@ -75,14 +87,22 @@ def trace_dns_of_page_hosts():
         }
         host_dns_servers.insert_one(host_dns_trace)
 
-def trace_asns_of_hosts(include_dns_servers=True):
+def trace_asns_of_hosts(page_hosts=None, include_dns_servers=True):
     """
     Find AS paths of hosts contacted when visiting each page.
+
     """
+    if page_hosts is None:
+        page_hosts = get_page_hosts(include_dns_servers)
+
     asn_tracer = AsnTracer()
-    page_hosts = get_page_hosts(include_dns_servers)
 
     for host in page_hosts:
+
+        # Skip any hosts we have traced before
+        if list(db.host_asn_traces.find({'host': host})):
+            continue
+
         host_asn_trace = {
             'host': host,
             'trace': asn_tracer.trace(str(host)),
@@ -102,15 +122,31 @@ def cleanup_tmp_selenium_files():
         rmtree(selenium_tmp_dir)
 
 
-def main():
-    guards_process = Process(target=get_and_save_guard_traces)
-    guards_process.start()
-    import_sites()
-    get_and_save_page_hosts()
-    trace_dns_of_page_hosts()
-    guards_process.join()
-    trace_asns_of_hosts()
+def pipelined_pages_trace(pages_db_name=None, num_pages=NUM_PAGES_DEFAULT):
+    """
+    Allows tracing of pages (finding all dns servers that were possibly queried
+    and all asns traversed), concurrently with visiting pages in a browser.
+    pages_db_name is the database we get the pages from, note that this is usually
+    different from the one it is saved to. num_pages is the number of pages this
+    function will trace before terminating. If this is higher than the number of
+    pages, this function will loop forever.
+    returns None.
+
+    """
 
 
-if __name__ == '__main__':
-    main()
+    pages_mongo_collection = get_db(pages_db_name).pages
+    traced_pages = set()
+    while len(traced_pages) < num_pages:
+        visited_pages = set(page['url'] for page in pages_mongo_collection.find())
+        untraced_page_urls = visited_pages - traced_pages
+        if untraced_page_urls:
+            untraced_pages = pages_mongo_collection.find(
+                {'url': {'$in': list(untraced_page_urls)}}
+            )
+            for page in untraced_pages:
+                print 'tracing dns', page['url']
+                trace_dns_of_page_hosts(get_page_hosts([page,], False))
+                print 'tracing asns', page['url']
+                trace_asns_of_hosts(get_page_hosts([page,], True))
+                traced_pages.add(page['url'])
