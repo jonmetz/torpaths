@@ -1,9 +1,9 @@
 from onionoo import Onionoo
 
 from trace_asn_paths import AsnTracer
-from database import get_trace_db
+from common import get_db
 
-db = get_trace_db().guard_traces
+db = get_db()
 asn_tracer = AsnTracer()
 
 def is_ipv6(netloc):
@@ -42,7 +42,7 @@ def get_and_save_guard_traces():
             'host': addr,
             'trace': trace
         }
-        db.guard_traces.insert_one(guard_trace)
+        db.guards.insert_one(guard_trace)
         guard_traces.append(guard_trace)
     return guard_traces
 
