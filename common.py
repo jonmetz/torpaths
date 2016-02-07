@@ -49,7 +49,7 @@ def get_db(name=None):
     else:
         mongo_host, mongo_port_str = mongo_netloc.split(':')
         mongo_port = int(mongo_port_str)
-        db = MongoClient(host=mongo_host, port=mongo_port)
+        db = MongoClient(host=mongo_host, port=mongo_port, connect=False)
 
     if name is None:
         name = get_db_name()
