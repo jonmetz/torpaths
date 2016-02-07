@@ -46,7 +46,8 @@ class MyPublicIPGetter(object):
             except ValueError:
                 addr = json.loads(urllib.urlopen('http://jsonip.com/').read())['ip']
 
-                self.my_ip = str(addr)
+            assert addr
+            self.my_ip = str(addr)
 
 def get_my_public_ip():
     ip_getter = MyPublicIPGetter()
