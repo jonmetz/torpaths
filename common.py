@@ -41,6 +41,9 @@ def get_db_name():
     default_name = 'torpaths_' + ip
     return os.getenv('TORPATHS_DB_NAME', default_name)
 
+def drop_db():
+    return MongoClient().drop_database(get_db_name())
+
 def get_db(name=None):
     mongo_netloc = os.getenv('TORPATHS_MONGO_NETLOC', None)
 
