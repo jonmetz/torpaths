@@ -4,8 +4,11 @@ The only real way to use this module is by using browser.visit
 traversed when a browser visits a webpage.
 
 """
+import errno
 import os
+import signal
 
+from functools import wraps
 from time import sleep, time
 
 from pyvirtualdisplay import Display
@@ -17,16 +20,10 @@ from proxy import run as run_proxy
 
 db = MongoClient().torpaths
 
-
-from functools import wraps
-import errno
-import os
-import signal
-
 class TimeoutError(Exception):
     pass
 
-def timeout(seconds=10, error_message=os.strerror(errno.ETIME)):
+def timeout(seconds=100, error_message=os.strerror(errno.ETIME)):
     def decorator(func):
         def _handle_timeout(signum, frame):
             raise TimeoutError(error_message)
@@ -105,7 +102,7 @@ class Browser(object):
     def kill_proxy(self):
         self.proxy_proc.terminate()
 
-    def _wait_for_requests(self, sleep_period=2, at_least=7, at_most=60):
+    def _wait_for_requests(self, sleep_period=5, at_least=15, at_most=60):
         start = time()
         contacted_hosts = set()
         sleep(at_least)

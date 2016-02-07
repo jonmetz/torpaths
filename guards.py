@@ -1,12 +1,10 @@
-from pymongo import MongoClient
 from onionoo import Onionoo
 
-import trace_asn_paths
-from common import get_db
+from trace_asn_paths import AsnTracer
+from database import get_trace_db
 
-db = get_db().guard_traces
-asn_tracer = trace_asn_paths.AsnTracer()
-
+db = get_trace_db().guard_traces
+asn_tracer = AsnTracer()
 
 def is_ipv6(netloc):
     return netloc.count(':') > 1 and '[' in netloc and ']' in netloc
@@ -38,23 +36,18 @@ def get_guard_addrs():
 def get_and_save_guard_traces():
     guard_addrs = get_guard_addrs()
     guard_traces = []
-    i = 0
     for addr in guard_addrs:
-        if i == 10:
-            break
-        i += 1
         trace = asn_tracer.trace(addr)
         guard_trace = {
             'host': addr,
             'trace': trace
         }
-        db.insert_one(guard_trace)
+        db.guard_traces.insert_one(guard_trace)
         guard_traces.append(guard_trace)
     return guard_traces
 
 def main():
     return get_and_save_guard_traces()
-
 
 
 if __name__ == '__main__':

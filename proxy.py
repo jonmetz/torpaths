@@ -4,13 +4,7 @@ from multiprocessing import Process, Queue
 
 from libmproxy import controller, proxy
 from libmproxy.proxy.server import ProxyServer
-
-BLACKLIST = {
-    'search.services.mozilla.com',
-    'tiles.services.mozilla.com',
-    'tiles-cloudfront.cdn.mozilla.net',
-}
-
+from common import HOST_BLACKLIST
 
 class RecordMaster(controller.Master):
     def __init__(self, server, q):
@@ -32,7 +26,7 @@ class RecordMaster(controller.Master):
             host = server_conn.address.split(':')[0]
 
         # store the host in the queue with the title output_queue[0]
-        if host not in BLACKLIST and re.match('aus[1-9].mozilla.org', host) is None:
+        if host not in HOST_BLACKLIST and re.match('aus[1-9].mozilla.org', host) is None:
             self.q.put(host)
 
         flow.reply()

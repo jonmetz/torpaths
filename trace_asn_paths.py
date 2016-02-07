@@ -14,7 +14,7 @@ from scapy.all import traceroute as scapy_traceroute
 from scapy.all import conf as scapy_conf
 scapy_conf.verb = 0  # shutup scapy
 
-from common import is_addr_private
+from common import is_addr_public
 
 
 class AsnTracer(object):
@@ -124,7 +124,7 @@ class AsnTracer(object):
 
         ans, unans = scapy_traceroute(host)
         traceroute_hops = set(
-            result.src for _, result in ans if not is_addr_private(result.src)
+            result.src for _, result in ans if is_addr_public(result.src)
         )
         result = self.hosts_to_asns(traceroute_hops)
 
