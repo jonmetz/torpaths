@@ -68,9 +68,10 @@ def get_trace_db():
     return getattr(db, scan_name)
 
 def import_sites(filename="sites.txt"):
-    db = get_db()
     with open(filename) as fp:
         lines = [line.strip('\n') for line in fp.readlines()]
+
+    db = get_db()
     db.sites.remove()
     for site in lines:
         db.sites.insert_one({'site': site})
