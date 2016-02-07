@@ -2,7 +2,7 @@ Installation
 ============
 To install, first install any non-python dependancies which can be done on Ubuntu using the following command:
 ```
-$ sudo apt-get install python-dev redis-server libjpeg-dev libxml2-dev libxslt-dev libssl-dev libffi-dev phantomjs
+$ sudo apt-get install python-dev firefox xvfb libjpeg-dev libxml2-dev libxslt-dev libssl-dev libffi-dev
 ```
 The install the Python dependancies with this command:
 ```

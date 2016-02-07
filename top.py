@@ -104,7 +104,7 @@ def cleanup_tmp_selenium_files():
 
 
 def main():
-    guards_process = Process(target=get_and_save_guard_traces())
+    guards_process = Process(target=get_and_save_guard_traces)
     guards_process.start()
     import_sites()
     get_and_save_page_hosts()
