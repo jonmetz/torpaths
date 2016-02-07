@@ -1,7 +1,7 @@
 from onionoo import Onionoo
 
 from trace_asn_paths import AsnTracer
-from common import get_db
+from database import get_db
 
 db = get_db()
 asn_tracer = AsnTracer()

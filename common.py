@@ -35,30 +35,6 @@ def is_addr_public(addr_str):
     return not (addr.is_private or addr.is_loopback or addr.is_multicast or
                 addr.is_link_local)
 
-
-def get_db_name():
-    ip = str(int(IPAddress(get_my_public_ip())))
-    default_name = 'torpaths_' + ip
-    return os.getenv('TORPATHS_DB_NAME', default_name)
-
-def drop_db():
-    return MongoClient().drop_database(get_db_name())
-
-def get_db(name=None):
-    mongo_netloc = os.getenv('TORPATHS_MONGO_NETLOC', None)
-
-    if mongo_netloc is None:
-        db = MongoClient(connect=False)
-    else:
-        mongo_host, mongo_port_str = mongo_netloc.split(':')
-        mongo_port = int(mongo_port_str)
-        db = MongoClient(host=mongo_host, port=mongo_port, connect=False)
-
-    if name is None:
-        name = get_db_name()
-
-    return getattr(db, name)
-
 def get_my_public_ip():
     data = json.loads(urllib.urlopen("http://wtfismyip.com/json").read())
     addr = data['YourFuckingIPAddress']

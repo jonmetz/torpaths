@@ -1,7 +1,10 @@
 from os import getenv
-
 from time import time
-from common import get_db
+
+from ipaddr import IPAddress
+from pymongo import MongoClient
+
+from common import get_my_public_ip
 
 def get_collection(name):
     return list(get_db()[name].find())
@@ -22,6 +25,27 @@ def copy_collection(from_collection, to_collection):
             print 'already copied'
 
     return sz
+
+def get_db_name():
+    ip = str(int(IPAddress(get_my_public_ip())))
+    default_name = 'torpaths_' + ip
+    return getenv('TORPATHS_DB_NAME', default_name)
+
+
+def get_db(name=None):
+    mongo_netloc = getenv('TORPATHS_MONGO_NETLOC', None)
+
+    if mongo_netloc is None:
+        db = MongoClient(connect=False)
+    else:
+        mongo_host, mongo_port_str = mongo_netloc.split(':')
+        mongo_port = int(mongo_port_str)
+        db = MongoClient(host=mongo_host, port=mongo_port, connect=False)
+
+    if name is None:
+        name = get_db_name()
+
+    return getattr(db, name)
 
 
 def get_trace_db():

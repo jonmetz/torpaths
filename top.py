@@ -10,8 +10,7 @@ from ipaddr import IPAddress
 from browser import Browser
 from trace_asn_paths import AsnTracer
 from trace_dns import DNSTracer
-from common import get_db
-from database import get_sites, import_sites
+from database import get_sites, import_sites, get_db
 from guards import get_and_save_guard_traces
 
 db = get_db()
