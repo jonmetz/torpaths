@@ -5,8 +5,8 @@ from shutil import rmtree
 from time import time
 from glob import glob
 
+import pymongo
 from selenium.common import exceptions as selenium_exception
-from pymongo import MongoClient
 from ipaddr import IPAddress
 
 from browser import Browser
@@ -152,9 +152,13 @@ def pipelined_pages_trace(pages_db_name=None, num_pages=NUM_PAGES_DEFAULT):
             untraced_pages = pages_mongo_collection.find(
                 {'url': {'$in': list(untraced_page_urls)}}
             )
-            for page in untraced_pages:
-                print 'tracing dns', page['url']
-                trace_dns_of_page_hosts(get_page_hosts([page,], False))
-                print 'tracing asns', page['url']
-                trace_asns_of_hosts(get_page_hosts([page,], True))
-                traced_pages.add(page['url'])
+            try:
+                for page in untraced_pages:
+                    print 'tracing dns', page['url']
+                    trace_dns_of_page_hosts(get_page_hosts([page,], False))
+                    print 'tracing asns', page['url']
+                    trace_asns_of_hosts(get_page_hosts([page,], True))
+                    traced_pages.add(page['url'])
+            except pymongo.errors.CursorNotFound:
+                print 'CursorNotFound'
+                pass
