@@ -144,7 +144,10 @@ def pipelined_pages_trace(pages_db_name=None, num_pages=NUM_PAGES_DEFAULT):
 
 
     pages_mongo_collection = get_db(pages_db_name).pages
-    traced_pages = set()
+    traced_hosts = set(str(trace['host']) for trace in get_db(pages_db_name).host_asn_traces.find())
+    visited_pages = set(page['url'] for page in pages_mongo_collection.find())
+    traced_pages = set(page for page in visited_pages if page in traced_hosts)
+
     while len(traced_pages) < num_pages:
         visited_pages = set(page['url'] for page in pages_mongo_collection.find())
         untraced_page_urls = visited_pages - traced_pages
