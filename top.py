@@ -1,3 +1,5 @@
+import socket
+
 from multiprocessing import Process
 from shutil import rmtree
 from time import time
@@ -102,11 +104,17 @@ def trace_asns_of_hosts(page_hosts=None, include_dns_servers=True):
         # Skip any hosts we have traced before
         if list(db.host_asn_traces.find({'host': host})):
             continue
+        try:
+            host_asn_trace = {
+                'host': host,
+                'trace': asn_tracer.trace(str(host)),
+            }
+        except socket.gaierror:
+            host_asn_trace = {
+                'host': host,
+                'trace': [],
+            }
 
-        host_asn_trace = {
-            'host': host,
-            'trace': asn_tracer.trace(str(host)),
-        }
         db.host_asn_traces.insert_one(host_asn_trace)
 
 def cleanup_tmp_selenium_files():
